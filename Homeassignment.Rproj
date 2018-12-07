@@ -11,3 +11,402 @@ Encoding: UTF-8
 
 RnwWeave: Sweave
 LaTeX: pdfLaTeX
+
+#set working directory#
+
+######################
+#     Assignment 1   #
+######################
+
+#########################
+#load data
+########################
+
+data_sample_1 = read.csv("https://raw.githubusercontent.com/kekecsz/PSYP13_Data_analysis_class-2018/master/home_sample_1.csv")
+
+###########################################################
+#                                                         #
+#                 Loading packages                        #
+#                                                         #
+###########################################################
+
+library(psych) # for describe
+library(dplyr) # for data management
+library(gsheet) # to read data from google sheets
+library(ggplot2) # for ggplot
+library(lm.beta) #f for lm.beta
+library(car) #for car
+
+###########################################################
+#                                                         #
+#                 Custom functions                        #
+#                                                         #
+###########################################################
+
+error_plotter <- function(mod, col = "black", x_var = NULL){
+  mod_vars = as.character(mod$call[2])
+  data = eval(parse(text = as.character(mod$call[3])))
+  y = substr(mod_vars, 1, as.numeric(gregexpr(pattern ='~',mod_vars))-2)
+  x = substr(mod_vars, as.numeric(gregexpr(pattern ='~',mod_vars))+2, nchar(mod_vars))
+  
+  data$pred = predict(mod)
+  
+  if(x == "1" & is.null(x_var)){x = "response_ID"
+  data$response_ID = 1:nrow(data)} else if(x == "1"){x = x_var}
+  
+  plot(data[,y] ~ data[,x], ylab = y, xlab = x)
+  abline(mod)
+  
+  for(i in 1:nrow(data)){
+    clip(min(data[,x]), max(data[,x]), min(data[i,c(y,"pred")]), max(data[i,c(y,"pred")]))
+    abline(v = data[i,x], lty = 2, col = col)
+  }
+  
+}
+
+#checking dataset for coding error and summarize data
+#exploring the data - from SI-sessio
+summary(data_sample_1)
+
+# descriptive statistics and plots for age
+describe(data_sample_1$age)
+
+# histograms
+hist(data_sample_1$age, breaks = 10)
+
+# scatterplot of relationship pain and age
+plot(age ~ pain, data = data_sample_1)
+#weird line, also an outlier above 200 and age. 
+
+#Identify outliers#
+plot(data_sample_1$pain ~ data_sample_1$age) #outlier identified.
+
+# using the table() function for descriptive statistics for categorical data, sex.
+table(data_sample_1$sex)
+
+#table for age, also clear one participant entered age of 222. 
+table(data_sample_1$age)
+
+#Change 222 to 22 since 222 is an impossible age. 
+#argue for in paper why I changed to 22.
+data_sample_1_cleaned = data_sample_1 # create a copy of the data where which will be cleaned
+data_sample_1_cleaned[data_sample_1_cleaned[, "age"] == "222", "age"] = 22
+data_sample_1_cleaned[, "age"] = as.numeric(as.character(data_sample_1_cleaned[,"age"]))
+
+describe(data_sample_1_cleaned[, "age"])
+
+hist(data_sample_1_cleaned$age, breaks=20)
+
+#plot relationship age and pain again after change. 
+plot(age ~ pain, data = data_sample_1_cleaned)
+
+data_sample_1[,"sex"] = droplevels(data_sample_1_cleaned[,"sex"])
+
+################################################
+# Multiple regression                          #
+################################################
+
+# Fit a regression model with multiple predictors, sex and age. Building model 1 with the cleaned data.
+mod_1 = lm(pain ~ sex + age, data = data_sample_1_cleaned)
+
+# see coefficient for model 1.
+mod_1
+
+
+# Plotting the regression models separetely
+
+plot(pain ~ sex, data = data_sample_1)
+abline(lm(pain ~ sex, data = data_sample_1)) #not regression line because it is categorical.
+plot(pain ~ age, data = data_sample_1_cleaned)
+abline(lm(pain ~ age, data = data_sample_1_cleaned)) #difference in plot, negative regression line instead of as before with 222 in.
+
+#descriptive statistics, like coefficient, F and and P-value
+summary(mod_1)
+
+#The AIC of model 1
+AIC(mod_1)
+
+#confidence intervalls
+confint(mod_1)
+
+#get standardized beta
+#use lm.beta for standardized coefficient. Can compare sqft_living and grade cause they are on same scale now. 
+# the bigger number/coefficient explains more
+lm.beta(mod_1)
+
+################################
+#hierachal regression#
+################################
+
+#include new predictors, build new model 2#
+
+#hierarhcal regression
+#add predictors to model 1.
+mod_2 = lm(pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum + cortisol_saliva + mindfulness, data = data_sample_1_cleaned)
+
+#summarize model 2, coefficient, p-value
+summary(mod_2) 
+
+#compare AIC for the models, which has better fit?
+AIC(mod_1)
+AIC(mod_2)
+#report model 2 has smaller AIC
+
+#compare ANOVA, F for the models
+anova(mod_1, mod_2)
+
+#confidence intervals for model 2
+confint(mod_2)
+
+#standardized beta values for model 2
+lm.beta(mod_2)
+
+#compare adj.r.squared, explained variance
+summary(mod_1)$adj.r.squared
+summary(mod_2)$adj.r.squared
+
+
+#plot extreme cases/Outlier#
+
+plot(age ~ pain, data = data_sample_1_cleaned)
+plot(sex ~ pain, data = data_sample_1_cleaned)
+
+#identify extreme cases with high leverage#
+plot(data_sample_1$pain ~ data_sample_1_cleaned$age)
+abline(lm(pain ~ age, data = data_sample_1_cleaned))
+
+plot(mod_1, which = 5)
+
+##########################
+###CHECKING ASSUMPTIONS###
+##########################
+
+#load packes, lmtest for bptest
+library(lmtest)
+
+#Looking for outliers
+
+#plotting regression lines.
+
+
+#age
+plot(data_sample_1_cleaned$pain ~ data_sample_1_cleaned$age)
+abline(lm(pain ~ age, data = data_sample_1_cleaned)) 
+
+# STAI_trait
+plot(data_sample_1_cleaned$pain ~ data_sample_1_cleaned$STAI_trait)
+abline(lm(pain ~ STAI_trait, data = data_sample_1_cleaned)) 
+
+#pain_cat
+plot(data_sample_1_cleaned$pain ~ data_sample_1_cleaned$pain_cat)
+abline(lm(pain ~ pain_cat, data = data_sample_1_cleaned)) 
+
+#cortisol_saliva
+plot(data_sample_1_cleaned$pain ~ data_sample_1_cleaned$cortisol_saliva)
+abline(lm(pain ~ cortisol_saliva, data = data_sample_1_cleaned))
+
+#cortisol_serum
+plot(data_sample_1_cleaned$pain ~ data_sample_1_cleaned$cortisol_serum)
+abline(lm(pain ~ cortisol_serum, data = data_sample_1_cleaned))
+
+#mindfulness
+plot(data_sample_1_cleaned$pain ~ data_sample_1_cleaned$mindfulness)
+abline(lm(pain ~ mindfulness, data = data_sample_1_cleaned))
+
+#########################################
+#ASSUMPTION LEVERAGE + COOKS DISTANCE
+#######################################
+
+# Leverage
+plot(mod_2, which=5) #three cases that may look like outlier, 19, 71, 44
+
+#Cook's distance
+plot(mod_2, which = 4) #three outliers, but not above 1, OK Cook's distance.
+
+########################
+# CHECKING NORMALITY #
+######################
+
+#qq plot
+plot(mod_2, which = 2) #seems OK, three cases may interupt (71,24,100)
+
+#historgram
+hist(residuals(mod_2), breaks = 20) #looks quite normal
+
+#skew and kurtiosis
+describe(residuals(mod_2))
+
+#shapiro test does not work 
+shapiro.test(mod_2$age)
+
+## Build a new model with few exlucluded outliers to see if it fixes the problem.
+# Exclude cases 71, 24 and 100 which showed up on the QQ-plot.
+# Here we refit the model without these cases two cases and recheck the assumption of normality. 
+data_sample_1_cleaned_nooutliers = data_sample_1_cleaned[-c(19, 71, 100),]
+
+mod_3 = lm(pain ~ sex + age + age + STAI_trait + pain_cat + cortisol_serum + cortisol_saliva + mindfulness, data = data_sample_1_cleaned_nooutliers)
+
+describe(residuals(mod_3))
+plot(mod_3, which = 2) 
+hist(residuals(mod_3), breaks = 20)
+#not big differences
+
+summary(mod_2)
+summary(mod_3)
+
+#LINEARITY
+residualPlots(mod_2)
+
+#HOMOCEDASTICTY
+plot(mod_2, which = 3)
+
+#ncv test
+ncvTest(mod_2) 
+
+# Breush-Pagan test
+bptest(mod_2) 
+
+#multicollinerity
+
+vif(mod_2)
+
+
+
+###############################################
+##### Assignment 2 - Backward regression   ######
+###############################################
+
+#Create the backward regression model with all predictors in it
+full_model <- lm( formula = pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum + mindfulness + weight, data = data_sample_1_cleaned)
+                             
+#Run data diagnostics#
+
+#plot the relationship between weight and pain, check for outliers#
+plot(data_sample_1_cleaned$pain ~ data_sample_1_cleaned$weight)
+abline(lm(pain ~ weight, data = data_sample_1_cleaned))
+#looks OK
+
+#look for coding errors in the datafile full_model
+
+#look at the data
+summary(data_sample_1_cleaned)
+
+summary(full_model)
+
+#Check assumptions for full_model since weight was added#
+
+#Leverage and Cook's distance
+# Leverage
+plot(full_model, which=5) 
+
+#Cook's distance
+plot(full_model, which = 4) #no outliers above 1, not influential
+
+#Checking normality#
+#qq plot
+plot(full_model, which = 2) #looks OK
+
+#histogram
+hist(residuals(full_model), breaks = 20) #not quite normal but quite close to normal curve
+
+#skew and kurtiosis
+describe(residuals(full_model))
+
+#Checking linearity#
+residualPlots(full_model) 
+#weight is not completely straight but quite close to straight, not too curvy.
+# test are all non-significant, lineartity is OK
+
+#Checking homocedasticity          
+ncvTest(full_model)     # p = 0.92969 --> p>0,05 violated.
+
+#Checking multicollinerity
+vif(full_model)
+
+#BACKWARD REGRESSION#
+
+#backward regression of fullmodel
+full_model_back = step(full_model, direction = "backward") 
+#best AIC:36.57. pain ~ sex + age + pain_cat + cortisol_serum + mindfulness
+
+#run new regression model, call it backward_model
+backward_model<- lm(pain ~ sex + age + pain_cat + cortisol_serum + mindfulness, data = data_sample_1_cleaned)
+
+#run final regression model from assignment 1, call it theory_based_model
+theory_based_model = lm(pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum + cortisol_saliva + mindfulness, data = data_sample_1_cleaned)
+
+# summary for theory_based_model
+summary(theory_based_model)
+#compare model's ANOVA
+anova(theory_based_model, backward_model) #not significant difference
+
+#compare AIC of theory_based_model and backward_model
+AIC(theory_based_model) #494.8187
+AIC(backward_model) #492,6282
+
+#compare AIC of full_model and backward_model
+AIC(full_model) #496.0944
+AIC(backward_model) #492,6282
+
+#compare ANOVA of full_model and backward_model
+anova(full_model, backward_model) #no significant difference
+
+#Descriptive statistics of the backward_model
+summary(backward_model)
+
+#confidence intervalls of backward_model
+confint(backward_model)
+
+#standardized beta values for backward_model
+lm.beta(backward_model)
+
+#Check assumptions for backwardmodel
+
+#Leverage and Cook's distance
+# Leverage
+plot(backward_model, which=5) 
+
+#Cook's distance
+plot(backward_model, which = 4) #no outliers above 1, not influential
+
+#Checking normality#
+#qq plot
+plot(backward_model, which = 2) #looks OK
+
+#histogram
+hist(residuals(backward_model), breaks = 20) 
+
+#skew and kurtiosis
+describe(residuals(backward_model))
+
+#Checking linearity#
+residualPlots(backward_model) 
+#weight is not completely straight but quite close to straight, not too curvy.
+# test are all non-significant, lineartity is OK
+
+#Checking homocedasticity          
+ncvTest(backward_model)     # p = 0.83799 --> p>0,05 violated.
+
+#Checking multicollinerity
+vif(backward_model)
+
+
+#PART 2 - report it on new data2.
+
+#load datafile 2
+home_sample_2 = read.csv("https://raw.githubusercontent.com/kekecsz/PSYP13_Data_analysis_class-2018/master/home_sample_2.csv")
+
+pred_theory_based_model <- predict(theory_based_model, home_sample_2)
+pred_backward_model <- predict(backward_model, home_sample_2)
+pred_full_model <- predict(full_model, home_sample_2)
+# now we calculate the sum of squared residuals
+RSS_theory_based_model = sum((home_sample_2[, "pain"] - pred_theory_based_model)^2)
+RSS_backward_model = sum((home_sample_2[, "pain"] - pred_backward_model)^2)
+RSS_full_model = sum((home_sample_2[, "pain"] - pred_full_model)^2)
+
+RSS_theory_based_model #[1] 240.2473
+
+RSS_backward_model #[2] 247.2046
+
+RSS_full_model #[3] 245.2991
+
